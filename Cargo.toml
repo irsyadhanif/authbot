@@ -1,0 +1,13 @@
+[package]
+name = "authbot"
+version = "0.1.0"
+authors = ["Irsyad Hanif <irsyad.hanif@uky.edu>"]
+
+[dependencies]
+hyper = "0.10"
+hyper-native-tls = "0.2"
+regex = "0.2"
+
+[dependencies.serenity]
+git = "https://github.com/zeyla/serenity.git"
+features = ["framework", "cache"]
