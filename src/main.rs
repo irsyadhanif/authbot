@@ -3,6 +3,7 @@ extern crate serenity;
 extern crate hyper;
 extern crate hyper_native_tls;
 extern crate regex;
+extern crate crypto;
 
 use serenity::client::Context;
 use serenity::model::Message;
@@ -17,7 +18,8 @@ use std::io::Read;
 use hyper::net::HttpsConnector;
 use hyper_native_tls::NativeTlsClient;
 use regex::Regex;
-
+use self::crypto::digest::Digest;
+use self::crypto::sha3::Sha3;
 
 fn main() {
     let path = Path::new("key.txt");
@@ -69,6 +71,12 @@ fn main() {
         .command("getuser", |c| c
             .desc("Takes an FP User ID and returns their details.")
             .exec(getuser))
+        .command("beginauth", |c| c
+            .desc("Begins the auth process")
+            .exec(beginauth))
+        .command("userauth", |c| c
+            .desc("Continue the auth process")
+            .exec(userauth))
 
     );
 
@@ -102,6 +110,7 @@ command!(getuser(_ctx, msg, args, first: String) {
     let mut body = String::new();
     response.read_to_string(&mut body).unwrap();
     let re = Regex::new(r"(?ixm)<d(d|t)>(.*?)</d(d|t)>").unwrap();
+    let reUsername = Regex::new(r"<title>View Profile: (.*?) - Facepunch<\/title>").unwrap();
     let mut results = Vec::new();
     for cap in re.captures_iter(&body) {
         let temp = cap[2].to_string();
@@ -127,9 +136,57 @@ command!(getuser(_ctx, msg, args, first: String) {
     }
 });
 
+command!(beginauth(_ctx, msg, args) {
+    let uid = format!("{:?}",msg.author.id);
+    let mut hasher = Sha3::sha3_256();
+    if let Err(why) = msg.channel_id.say("To auth, please place the DM'ed key into your location on FP and say !userauth <userid>") {
+        println!("Error sending message {:?}", why);
+    }
+    hasher.input_str(&uid);
+    let hash = hasher.result_str();
+    if let Err(why) = msg.author.dm(&hash) {
+        println!("Error sending message {:?}", why);
+    }
+});
 
+command!(userauth(_ctx, msg, args, first:String) {
+    let uid = format!("{:?}",msg.author.id);
+    let mut hasher = Sha3::sha3_256();
+    hasher.input_str(&uid);
+    let hash = hasher.result_str();
 
+    let ssl = NativeTlsClient::new().unwrap();
+    let connector = HttpsConnector::new(ssl);
+    let client = hyper::Client::with_connector(connector);
+    let url = format!("https://facepunch.com/member.php?u={}#aboutme", first);
+    let mut response = client.get(&url).
+        header(Connection::close()).send().unwrap();
+    let mut body = String::new();
+    response.read_to_string(&mut body).unwrap();
+    let re = Regex::new(r"(?ixm)<d(d|t)>(.*?)</d(d|t)>").unwrap();
+    let mut results = Vec::new();
+    for cap in re.captures_iter(&body) {
+        let temp = cap[2].to_string();
+        results.push(temp);
+    }
 
+    let mut location = String::new();
+    for (x, result) in results.iter().enumerate() {
+        if **result == String::from("Location:") {
+            location = results[x + 1].clone();
+        }
+    }
+
+    if hash == location {
+        if let Err(why) = msg.channel_id.say("User authorized.") {
+            println!("Error sending message {:?}", why);
+        }
+    } else {
+        if let Err(why) = msg.channel_id.say("Missing or invalid auth key.") {
+            println!("Error sending message {:?}", why);
+        }
+    }
+});
 
 
 

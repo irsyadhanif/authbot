@@ -7,6 +7,7 @@ authors = ["Irsyad Hanif <irsyad.hanif@uky.edu>"]
 hyper = "0.10"
 hyper-native-tls = "0.2"
 regex = "0.2"
+rust-crypto = "^0.2"
 
 [dependencies.serenity]
 git = "https://github.com/zeyla/serenity.git"
